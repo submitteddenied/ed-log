@@ -1,15 +1,17 @@
 const EventEmitter = require('events')
 const fs = require('fs')
 const path = require('path')
+const chokidar = require('chokidar')
 
 class LogFileWatcher extends EventEmitter {
     constructor(filepath, options) {
         super()
         this.filepath = filepath
-        this.watcher = fs.watch(this.filepath, {persistent: true, recursive: true, encoding: 'utf8'}, (event, filename) => this.onFileUpdate(event, filename))
+        this.watcher = chokidar.watch(this.filepath, {persistent: true, usePolling: true, interval: 500})
+        this.watcher.on('change', (filename, stats) => this.onFileUpdate(filename, stats))
         this.nextLine = 0
         if(options.catchup === undefined || options.catchup === true) {
-            this.onFileUpdate('change', this.filepath)
+            this.onFileUpdate(this.filepath, null)
         } else {
             fs.readFile(path.resolve(this.filepath), {encoding: 'utf8'}, (err, contents) => {
                 if(err) {
@@ -23,12 +25,7 @@ class LogFileWatcher extends EventEmitter {
         }
     }
 
-    onFileUpdate(event, filename) {
-        if(event !== 'change') {
-            //ignore non-changes
-            return
-        }
-
+    onFileUpdate(filename, stats) {
         fs.readFile(path.resolve(this.filepath), {encoding: 'utf8'}, (err, contents) => {
             if(err) {
                 console.log(`LogFileWatcher[${this.filepath}]: Error reading file - ${err}`)
